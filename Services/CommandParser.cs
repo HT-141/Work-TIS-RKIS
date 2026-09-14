@@ -30,6 +30,7 @@ namespace TodoApp.Services
                 ["delete"] = args => ParseDeleteCommand(args),
                 ["undo"] = args => new UndoCommand(),
                 ["redo"] = args => new RedoCommand(),
+                ["search"] = args => ParseSearchCommand(args),
             };
         }
 
@@ -160,6 +161,83 @@ namespace TodoApp.Services
             }
 
             return new DeleteCommand(index);
+        }
+
+        private static ICommand ParseSearchCommand(string[] args)
+        {
+            string contains = null, startsWith = null, endsWith = null, sortBy = null;
+            TodoStatus? status = null;
+            DateTime? from = null, to = null;
+            bool desc = false;
+            int? top = null;
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                switch (args[i])
+                {
+                    case "--contains":
+                        if (i + 1 < args.Length) contains = args[++i];
+                        break;
+
+                    case "--starts-with":
+                        if (i + 1 < args.Length) startsWith = args[++i];
+                        break;
+
+                    case "--ends-with":
+                        if (i + 1 < args.Length) endsWith = args[++i];
+                        break;
+
+                    case "--status":
+                        if (i + 1 < args.Length)
+                        {
+                            if (Enum.TryParse<TodoStatus>(args[++i], ignoreCase: true, out var parsedStatus))
+                                status = parsedStatus;
+                            else
+                                Console.WriteLine($"Неизвестный статус: '{args[i]}'. Доступные: NotStarted, InProgress, Completed, Postponed, Failed");
+                        }
+                        break;
+
+                    case "--from":
+                        if (i + 1 < args.Length)
+                        {
+                            if (DateTime.TryParse(args[++i], out var parsedFrom))
+                                from = parsedFrom;
+                            else
+                                Console.WriteLine($"Некорректная дата в --from: '{args[i]}'. Формат: yyyy-MM-dd");
+                        }
+                        break;
+
+                    case "--to":
+                        if (i + 1 < args.Length)
+                        {
+                            if (DateTime.TryParse(args[++i], out var parsedTo))
+                                to = parsedTo;
+                            else
+                                Console.WriteLine($"Некорректная дата в --to: '{args[i]}'. Формат: yyyy-MM-dd");
+                        }
+                        break;
+
+                    case "--sort":
+                        if (i + 1 < args.Length) sortBy = args[++i].ToLower();
+                        break;
+
+                    case "--desc":
+                        desc = true;
+                        break;
+
+                    case "--top":
+                        if (i + 1 < args.Length)
+                        {
+                            if (int.TryParse(args[++i], out var parsedTop))
+                                top = parsedTop;
+                            else
+                                Console.WriteLine($"--top требует число, получено: '{args[i]}'");
+                        }
+                        break;
+                }
+            }
+
+            return new SearchCommand(contains, startsWith, endsWith, status, from, to, sortBy, desc, top);
         }
 
         private static string[] SplitCommand(string input)
