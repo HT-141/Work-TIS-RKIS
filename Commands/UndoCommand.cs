@@ -1,4 +1,5 @@
 using System;
+using TodoApp.Exceptions;
 using TodoApp.Services;
 
 namespace TodoApp.Commands
@@ -8,10 +9,7 @@ namespace TodoApp.Commands
         public void Execute()
         {
             if (AppInfo.UndoStack.Count == 0)
-            {
-                Console.WriteLine("Нечего отменять.");
-                return;
-            }
+                throw new InvalidCommandException("Нечего отменять: история изменений пуста.");
 
             var command = AppInfo.UndoStack.Pop();
             command.Unexecute();

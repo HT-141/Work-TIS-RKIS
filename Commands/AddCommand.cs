@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TodoApp.Exceptions;
 using TodoApp.Models;
 using TodoApp.Services;
 
@@ -21,12 +22,16 @@ namespace TodoApp.Commands
         public void Execute()
         {
             _todos = AppInfo.GetCurrentTodoList();
-            if (_todos == null) return;
+            if (_todos == null)
+                throw new AuthenticationException("Вы не авторизованы. Войдите в профиль, чтобы работать с задачами.");
 
             if (_isMultiline)
             {
                 _text = ReadMultilineInput();
             }
+
+            if (string.IsNullOrWhiteSpace(_text))
+                throw new InvalidArgumentException("Текст задачи не может быть пустым.");
 
             _addedItem = new TodoItem(_text);
             _todos.Add(_addedItem);

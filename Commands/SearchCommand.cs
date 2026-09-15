@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using TodoApp.Exceptions;
 using TodoApp.Models;
 using TodoApp.Services;
 
@@ -42,7 +43,10 @@ namespace TodoApp.Commands
         public void Execute()
         {
             var todoList = AppInfo.GetCurrentTodoList();
-            if (todoList == null || todoList.Count == 0)
+            if (todoList == null)
+                throw new AuthenticationException("Вы не авторизованы. Войдите в профиль, чтобы работать с задачами.");
+
+            if (todoList.Count == 0)
             {
                 Console.WriteLine("Список задач пуст.");
                 return;

@@ -1,4 +1,5 @@
 using System;
+using TodoApp.Exceptions;
 using TodoApp.Models;
 using TodoApp.Services;
 
@@ -20,16 +21,16 @@ namespace TodoApp.Commands
 		public void Execute()
 		{
 			_todos = AppInfo.GetCurrentTodoList();
-			if (_todos == null) return;
+			if (_todos == null)
+				throw new AuthenticationException("Вы не авторизованы. Войдите в профиль, чтобы работать с задачами.");
 
+			if (string.IsNullOrWhiteSpace(_newText))
+				throw new InvalidArgumentException("Новый текст задачи не может быть пустым.");
+
+			if (_index < 0 || _index >= _todos.Count)
+				throw new TaskNotFoundException(_index);
 
 			var item = _todos[_index];
-
-			if (item == null)
-			{
-				Console.WriteLine($"Ошибка: задача с индексом {_index} не найдена.");
-				return;
-			}
 
 			_oldText = item.Text;
 			_todos.UpdateItem(_index, _newText);

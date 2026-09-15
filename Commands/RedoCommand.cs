@@ -1,4 +1,5 @@
 using System;
+using TodoApp.Exceptions;
 using TodoApp.Services;
 
 namespace TodoApp.Commands
@@ -8,10 +9,7 @@ namespace TodoApp.Commands
         public void Execute()
         {
             if (AppInfo.RedoStack.Count == 0)
-            {
-                Console.WriteLine("Нечего повторять.");
-                return;
-            }
+                throw new InvalidCommandException("Нечего повторять: стек повторов пуст.");
 
             var command = AppInfo.RedoStack.Pop();
             command.Execute();

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using TodoApp.Commands;
+using TodoApp.Exceptions;
 using TodoApp.Models;
 
 namespace TodoApp.Services
@@ -48,21 +49,10 @@ namespace TodoApp.Services
             string command = parts[0].ToLower();
             var args = parts.Skip(1).ToArray();
 
-            if (_commandHandlers.ContainsKey(command))
-            {
-                try
-                {
-                    return _commandHandlers[command](args);
-                }
-                catch
-                {
-                    Console.WriteLine($"Ошибка при выполнении команды '{command}'");
-                    return new HelpCommand();
-                }
-            }
+            if (!_commandHandlers.ContainsKey(command))
+                throw new InvalidCommandException($"Неизвестная команда: '{command}'. Введите 'help' для справки.");
 
-            Console.WriteLine($"Неизвестная команда: '{command}'. Введите 'help' для справки.");
-            return new HelpCommand();
+            return _commandHandlers[command](args);
         }
 
         private static ICommand ParseProfileCommand(string[] args)
@@ -101,52 +91,38 @@ namespace TodoApp.Services
 
         private static ICommand ParseReadCommand(string[] args)
         {
-            if (args.Length > 0 && int.TryParse(args[0], out int index))
-            {
-                return new ReadCommand(index);
-            }
+            if (args.Length == 0)
+                throw new InvalidArgumentException("Используйте: read <индекс>");
 
-            Console.WriteLine("Используйте: read <индекс>");
-            return new HelpCommand();
+            if (!int.TryParse(args[0], out int index))
+                throw new InvalidArgumentException($"Индекс должен быть числом. Получено: '{args[0]}'");
+
+            return new ReadCommand(index);
         }
 
         private static ICommand ParseStatusCommand(string[] args)
         {
             if (args.Length < 2)
-            {
-                Console.WriteLine("Используйте: status <индекс> <статус>");
-                return new HelpCommand();
-            }
+                throw new InvalidArgumentException("Используйте: status <индекс> <статус>");
 
             if (!int.TryParse(args[0], out int index))
-            {
-                Console.WriteLine("Индекс должен быть числом.");
-                return new HelpCommand();
-            }
+                throw new InvalidArgumentException($"Индекс должен быть числом. Получено: '{args[0]}'");
 
             string statusStr = args[1].ToLower();
-            if (Enum.TryParse<TodoStatus>(statusStr, ignoreCase: true, out var status))
-            {
-                return new StatusCommand(index, status);
-            }
+            if (!Enum.TryParse<TodoStatus>(statusStr, ignoreCase: true, out var status))
+                throw new InvalidArgumentException(
+                    $"Неизвестный статус: '{args[1]}'. Доступные: NotStarted, InProgress, Completed, Postponed, Failed");
 
-            Console.WriteLine("Неизвестный статус. Доступные: NotStarted, InProgress, Completed, Postponed, Failed");
-            return new HelpCommand();
+            return new StatusCommand(index, status);
         }
 
         private static ICommand ParseUpdateCommand(string[] args)
         {
             if (args.Length < 2)
-            {
-                Console.WriteLine("Используйте: update <индекс> \"новый текст\"");
-                return new HelpCommand();
-            }
+                throw new InvalidArgumentException("Используйте: update <индекс> \"новый текст\"");
 
             if (!int.TryParse(args[0], out int index))
-            {
-                Console.WriteLine("Индекс должен быть числом.");
-                return new HelpCommand();
-            }
+                throw new InvalidArgumentException($"Индекс должен быть числом. Получено: '{args[0]}'");
 
             string newText = string.Join(" ", args.Skip(1)).Trim('"');
             return new UpdateCommand(index, newText);
@@ -154,11 +130,11 @@ namespace TodoApp.Services
 
         private static ICommand ParseDeleteCommand(string[] args)
         {
-            if (args.Length == 0 || !int.TryParse(args[0], out int index))
-            {
-                Console.WriteLine("Используйте: delete <индекс>");
-                return new HelpCommand();
-            }
+            if (args.Length == 0)
+                throw new InvalidArgumentException("Используйте: delete <индекс>");
+
+            if (!int.TryParse(args[0], out int index))
+                throw new InvalidArgumentException($"Индекс должен быть числом. Получено: '{args[0]}'");
 
             return new DeleteCommand(index);
         }
@@ -176,49 +152,60 @@ namespace TodoApp.Services
                 switch (args[i])
                 {
                     case "--contains":
-                        if (i + 1 < args.Length) contains = args[++i];
+                        if (i + 1 >= args.Length)
+                            throw new InvalidArgumentException("Флаг --contains требует значение.");
+                        contains = args[++i];
                         break;
 
                     case "--starts-with":
-                        if (i + 1 < args.Length) startsWith = args[++i];
+                        if (i + 1 >= args.Length)
+                            throw new InvalidArgumentException("Флаг --starts-with требует значение.");
+                        startsWith = args[++i];
                         break;
 
                     case "--ends-with":
-                        if (i + 1 < args.Length) endsWith = args[++i];
+                        if (i + 1 >= args.Length)
+                            throw new InvalidArgumentException("Флаг --ends-with требует значение.");
+                        endsWith = args[++i];
                         break;
 
                     case "--status":
-                        if (i + 1 < args.Length)
-                        {
-                            if (Enum.TryParse<TodoStatus>(args[++i], ignoreCase: true, out var parsedStatus))
-                                status = parsedStatus;
-                            else
-                                Console.WriteLine($"Неизвестный статус: '{args[i]}'. Доступные: NotStarted, InProgress, Completed, Postponed, Failed");
-                        }
+                        if (i + 1 >= args.Length)
+                            throw new InvalidArgumentException("Флаг --status требует значение.");
+
+                        if (!Enum.TryParse<TodoStatus>(args[++i], ignoreCase: true, out var parsedStatus))
+                            throw new InvalidArgumentException(
+                                $"Неизвестный статус: '{args[i]}'. Доступные: NotStarted, InProgress, Completed, Postponed, Failed");
+
+                        status = parsedStatus;
                         break;
 
                     case "--from":
-                        if (i + 1 < args.Length)
-                        {
-                            if (DateTime.TryParse(args[++i], out var parsedFrom))
-                                from = parsedFrom;
-                            else
-                                Console.WriteLine($"Некорректная дата в --from: '{args[i]}'. Формат: yyyy-MM-dd");
-                        }
+                        if (i + 1 >= args.Length)
+                            throw new InvalidArgumentException("Флаг --from требует значение.");
+
+                        if (!DateTime.TryParse(args[++i], out var parsedFrom))
+                            throw new InvalidArgumentException(
+                                $"Некорректная дата в --from: '{args[i]}'. Формат: yyyy-MM-dd");
+
+                        from = parsedFrom;
                         break;
 
                     case "--to":
-                        if (i + 1 < args.Length)
-                        {
-                            if (DateTime.TryParse(args[++i], out var parsedTo))
-                                to = parsedTo;
-                            else
-                                Console.WriteLine($"Некорректная дата в --to: '{args[i]}'. Формат: yyyy-MM-dd");
-                        }
+                        if (i + 1 >= args.Length)
+                            throw new InvalidArgumentException("Флаг --to требует значение.");
+
+                        if (!DateTime.TryParse(args[++i], out var parsedTo))
+                            throw new InvalidArgumentException(
+                                $"Некорректная дата в --to: '{args[i]}'. Формат: yyyy-MM-dd");
+
+                        to = parsedTo;
                         break;
 
                     case "--sort":
-                        if (i + 1 < args.Length) sortBy = args[++i].ToLower();
+                        if (i + 1 >= args.Length)
+                            throw new InvalidArgumentException("Флаг --sort требует значение.");
+                        sortBy = args[++i].ToLower();
                         break;
 
                     case "--desc":
@@ -226,14 +213,17 @@ namespace TodoApp.Services
                         break;
 
                     case "--top":
-                        if (i + 1 < args.Length)
-                        {
-                            if (int.TryParse(args[++i], out var parsedTop))
-                                top = parsedTop;
-                            else
-                                Console.WriteLine($"--top требует число, получено: '{args[i]}'");
-                        }
+                        if (i + 1 >= args.Length)
+                            throw new InvalidArgumentException("Флаг --top требует значение.");
+
+                        if (!int.TryParse(args[++i], out var parsedTop))
+                            throw new InvalidArgumentException($"--top требует число, получено: '{args[i]}'");
+
+                        top = parsedTop;
                         break;
+
+                    default:
+                        throw new InvalidArgumentException($"Неизвестный флаг: '{args[i]}'");
                 }
             }
 
