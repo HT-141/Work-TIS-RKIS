@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,6 +33,7 @@ namespace TodoApp.Services
                 ["undo"] = args => new UndoCommand(),
                 ["redo"] = args => new RedoCommand(),
                 ["search"] = args => ParseSearchCommand(args),
+                ["load"] = args => ParseLoadCommand(args),
             };
         }
 
@@ -228,6 +230,26 @@ namespace TodoApp.Services
             }
 
             return new SearchCommand(contains, startsWith, endsWith, status, from, to, sortBy, desc, top);
+        }
+
+        private static ICommand ParseLoadCommand(string[] args)
+        {
+            if (args.Length < 2)
+                throw new InvalidArgumentException("Используйте: load <количество_скачиваний> <размер_скачиваний>");
+
+            if (!int.TryParse(args[0], out int downloadsCount))
+                throw new InvalidArgumentException($"Количество скачиваний должно быть числом. Получено: '{args[0]}'");
+
+            if (!int.TryParse(args[1], out int size))
+                throw new InvalidArgumentException($"Размер скачиваний должен быть числом. Получено: '{args[1]}'");
+
+            if (downloadsCount <= 0)
+                throw new InvalidArgumentException($"Количество скачиваний должно быть больше 0. Получено: {downloadsCount}");
+
+            if (size <= 0)
+                throw new InvalidArgumentException($"Размер скачиваний должен быть больше 0. Получено: {size}");
+
+            return new LoadCommand(downloadsCount, size);
         }
 
         private static string[] SplitCommand(string input)
