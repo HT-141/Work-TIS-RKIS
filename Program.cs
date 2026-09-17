@@ -1,6 +1,4 @@
-
 using System;
-using System.IO;
 using System.Linq;
 using TodoApp.Commands;
 using TodoApp.Exceptions;
@@ -11,14 +9,17 @@ namespace TodoApp
 {
     class Program
     {
-		static void Main()
+        // FileManager теперь обычный (не статический) класс, реализующий IDataStorage.
+        // Program хранит единственный экземпляр и передаёт ему только те данные,
+        // которые нужно сохранить/загрузить — сам FileManager ничего не знает про AppInfo.
+        private static readonly IDataStorage _storage = new FileManager();
+
+        static void Main()
         {
             Console.OutputEncoding = System.Text.Encoding.UTF8;
             Console.Clear();
 
-            FileManager.EnsureDataDirectory();
-
-            AppInfo.Profiles = FileManager.LoadAllProfiles();
+            AppInfo.Profiles = _storage.LoadProfiles().ToList();
 
             MainLoop();
         }
@@ -87,28 +88,20 @@ namespace TodoApp
             Console.Write("Пароль: ");
             string password = Console.ReadLine() ?? "";
 
-            var profile = FileManager.LoadProfile(login, password);
+            var profile = AppInfo.Profiles.FirstOrDefault(p => p.Login == login && p.Password == password);
 
             if (profile == null)
                 throw new AuthenticationException("Неверный логин или пароль.");
 
             AppInfo.CurrentProfile = profile;
+            AppInfo.UserTodos[profile.Id] = new TodoList();
 
-            string todoPath = FileManager.GetTodoFilePath(profile.Id);
-            if (File.Exists(todoPath))
-            {
-                AppInfo.UserTodos[profile.Id] = FileManager.LoadTodos(todoPath);
-            }
-            else
-            {
-                AppInfo.UserTodos[profile.Id] = new TodoList();
-                FileManager.SaveTodos(AppInfo.UserTodos[profile.Id], todoPath);
-            }
+            foreach (var item in _storage.LoadTodos(profile.Id))
+                AppInfo.UserTodos[profile.Id].Add(item);
 
-            var todoList = AppInfo.UserTodos[profile.Id];
-            SubscribeToTodoEvents(todoList);
+            SubscribeToTodoEvents(profile.Id, AppInfo.UserTodos[profile.Id]);
 
-			AppInfo.ClearUndoRedo();
+            AppInfo.ClearUndoRedo();
             return true;
         }
 
@@ -148,44 +141,45 @@ namespace TodoApp
 
             var profile = new Profile(login, password, firstName, lastName, birthYear);
             AppInfo.Profiles.Add(profile);
-            FileManager.SaveProfile(profile);
+            _storage.SaveProfiles(AppInfo.Profiles);
 
             AppInfo.CurrentProfile = profile;
             AppInfo.UserTodos[profile.Id] = new TodoList();
+            _storage.SaveTodos(profile.Id, AppInfo.UserTodos[profile.Id].GetAll());
 
-            string todoPath = FileManager.GetTodoFilePath(profile.Id);
-            FileManager.SaveTodos(AppInfo.UserTodos[profile.Id], todoPath);
+            SubscribeToTodoEvents(profile.Id, AppInfo.UserTodos[profile.Id]);
 
-            var todoList = AppInfo.UserTodos[profile.Id];
-            SubscribeToTodoEvents(todoList);
-
-			AppInfo.ClearUndoRedo();
+            AppInfo.ClearUndoRedo();
             return true;
         }
 
-        private static void SubscribeToTodoEvents(TodoList todoList)
+        // Program явно знает, для какого userId нужно сохранять список задач —
+        // поэтому FileManager может остаться "глупым" и не заглядывать в AppInfo.
+        private static void SubscribeToTodoEvents(Guid userId, TodoList todoList)
         {
-            todoList.OnTodoAdded += FileManager.SaveTodoList;
-            todoList.OnTodoDeleted += FileManager.SaveTodoList;
-            todoList.OnTodoUpdated += FileManager.SaveTodoList;
-            todoList.OnStatusChanged += FileManager.SaveTodoList;
-		}
+            void SaveCurrentTodos(TodoItem _) => _storage.SaveTodos(userId, todoList.GetAll());
 
-		private static void MainLoop()
+            todoList.OnTodoAdded += SaveCurrentTodos;
+            todoList.OnTodoDeleted += SaveCurrentTodos;
+            todoList.OnTodoUpdated += SaveCurrentTodos;
+            todoList.OnStatusChanged += SaveCurrentTodos;
+        }
+
+        private static void MainLoop()
         {
             while (true)
             {
-				if (AppInfo.CurrentProfile is null)
-				{
-					if (!SelectOrCreateProfile())
-					{
-						continue;
-					}
+                if (AppInfo.CurrentProfile is null)
+                {
+                    if (!SelectOrCreateProfile())
+                    {
+                        continue;
+                    }
 
-					Console.WriteLine($"\nДобро пожаловать, {AppInfo.CurrentProfile?.FirstName}!\n");
-				}
+                    Console.WriteLine($"\nДобро пожаловать, {AppInfo.CurrentProfile?.FirstName}!\n");
+                }
 
-				Console.Write("> ");
+                Console.Write("> ");
                 string input = Console.ReadLine() ?? "";
 
                 if (input.ToLower() == "exit")
@@ -228,6 +222,14 @@ namespace TodoApp
                 catch (InvalidArgumentException ex)
                 {
                     Console.WriteLine($"Ошибка аргумента: {ex.Message}");
+                }
+                catch (DataAccessException ex)
+                {
+                    Console.WriteLine($"Ошибка доступа к данным: {ex.Message}");
+                }
+                catch (DataCorruptedException ex)
+                {
+                    Console.WriteLine($"Ошибка данных: {ex.Message}");
                 }
                 catch (Exception ex)
                 {

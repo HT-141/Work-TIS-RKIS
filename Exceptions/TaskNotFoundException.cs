@@ -8,13 +8,12 @@ namespace TodoApp.Exceptions
     public class TaskNotFoundException : Exception
     {
         public int Index { get; }
-
         public TaskNotFoundException(int index)
             : base($"Задача с индексом {index} не найдена.")
         {
             Index = index;
         }
 
-        public TaskNotFoundException(string message) : base(message) { }
+        public TaskNotFoundException(string message) : base(message) {}
     }
 }
